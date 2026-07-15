@@ -1,0 +1,115 @@
+# ============================================
+# SECURITY: Secrets, Keys & Credentials
+# ============================================
+# Environment files
+.env
+.env.*
+.env.local
+.env.development
+.env.staging
+.env.production
+.env.test
+
+# Secrets and keys
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*.cer
+secrets.json
+credentials.json
+service-account*.json
+
+# ============================================
+# PYTHON
+# ============================================
+# Virtual environments
+venv/
+env/
+env.bak/
+MyVenv/
+.venv/
+.python-version
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+
+# Distribution / packaging
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+cover/
+
+# ============================================
+# IDE / EDITOR
+# ============================================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.settings/
+
+# ============================================
+# OS FILES
+# ============================================
+.DS_Store
+Thumbs.db
+desktop.ini
+*.tmp
+*.bak
+
+# ============================================
+# DATABASE
+# ============================================
+*.sqlite3
+*.db
+*.sqlite
+
+# ============================================
+# MISC
+# ============================================
+*.log
+logs/
+*.pid
+*.seed
