@@ -17,7 +17,7 @@ router = APIRouter()
 
 
 
-@router.post("")
+@router.post("",status_code=status.HTTP_201_CREATED, summary="Create a new restaurant",description="Registers a new restaurant in the system. Requires owner authentication.")
 def review(loading:Restaurant_create, db:Session=Depends(get_db), current_user:str=Depends(get_current_user)):
     user = db.query(User).filter(User.email == current_user).first()
     if not user:
@@ -40,10 +40,11 @@ def review(loading:Restaurant_create, db:Session=Depends(get_db), current_user:s
     }
 
 @router.patch("/{restaurant_id}/image")
-def upload_restaurant_image(restaurant_id:int,file:UploadFile=File(...),db:Session=Depends(get_db),current_user:str=Depends(get_current_user)):
+def upload_restaurant_image(restaurant_id:int, file:UploadFile=File(...), db:Session=Depends(get_db), current_user:str=Depends(get_current_user)):
     user=db.query(User).filter(User.email == current_user).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+    
     restaurant=db.query(Restaurant).filter(Restaurant.id == restaurant_id).first()
     if not restaurant:
         raise HTTPException(status_code=404, detail="restaurant not found")
@@ -68,7 +69,7 @@ def upload_restaurant_image(restaurant_id:int,file:UploadFile=File(...),db:Sessi
     return {"message":"Image uploaded successfully","path": file_path}  
 
 
-@router.get("/")
+@router.get("/",summary="Get all restaurants", description="Returns a paginated list of all registered restaurants.")
 def get_restaurants(db: Session = Depends(get_db), page: int = 1, limit: int = 10):
     #calculate how many items to skip
     skip=(page-1)*limit
@@ -86,7 +87,7 @@ def get_restaurants(db: Session = Depends(get_db), page: int = 1, limit: int = 1
         "restaurants": restaurants
     }
 
-@router.get("/search")
+@router.get("/search",summary="Search restaurants", description="Filter restaurants by name, minimum rating, or location.")
 def search_restaurants(name:str=None,min_rating:float=None,location:str=None,db:Session=Depends(get_db)):
     #The .ilike() filter makes the search case-insensitive
     #%name% acts as a wildcard, finding the string anywhere in the name
@@ -101,12 +102,12 @@ def search_restaurants(name:str=None,min_rating:float=None,location:str=None,db:
     return query.all()
             
 
-@router.get("/{restaurant_id}")
+@router.get("/{restaurant_id}",summary="Get restaurant by ID", description="Returns details of a specific restaurant.")
 def get_restaurant(restaurant_id: int, db: Session = Depends(get_db)):
     return db.query(Restaurant).filter(Restaurant.id == restaurant_id).first()
 
 
-@router.delete("/{restaurant_id}")
+@router.delete("/{restaurant_id}",status_code=status.HTTP_204_NO_CONTENT,summary="Delete a restaurant")
 def delete_restaurant(restaurant_id: int, db:Session=Depends(get_db), current_user:str=Depends(get_current_user)):
     user = db.query(User).filter(User.email == current_user).first()
 
