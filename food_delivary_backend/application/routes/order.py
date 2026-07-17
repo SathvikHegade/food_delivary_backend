@@ -15,15 +15,15 @@ from logger import logger
 router = APIRouter()
 
 @router.post("/", response_model=OrderResponse, status_code=status.HTTP_201_CREATED)
-def place_order(db: Session = Depends(get_db), current_user_email: str = Depends(get_current_user)):
+def place_order(db: Session = Depends(get_db), current_user_email: User = Depends(get_current_user)):
     try:
         #fetch the logged in user profile
-        user = db.query(User).filter(User.email == current_user_email).first()
-        if not user:
+        # user = db.query(User).filter(User.email == current_user_email).first()
+        if not current_user_email:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
         #grab all items in this users cart along with current food prices
-        cart_items = db.query(Carts, FoodItem).join(FoodItem, Carts.food_item_id == FoodItem.id).filter(Carts.user_id == user.id).all()
+        cart_items = db.query(Carts, FoodItem).join(FoodItem, Carts.food_item_id == FoodItem.id).filter(Carts.user_id == current_user_email.id).all()
         if not cart_items:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Your shopping cart is empty")
 
@@ -31,7 +31,7 @@ def place_order(db: Session = Depends(get_db), current_user_email: str = Depends
         grand_total_price = sum(food.price * cart.quantity for cart, food in cart_items)
 
         #create and stage the master record inside order_table
-        new_order = Order(user_id=user.id, total_amount=grand_total_price, status="PLACED")
+        new_order = Order(user_id=current_user_email.id, total_amount=grand_total_price, status="PLACED")
         db.add(new_order)
         
         db.flush()#flush() pushes changes to DB and grabs new_order.id WITHOUT committing yet
@@ -47,12 +47,12 @@ def place_order(db: Session = Depends(get_db), current_user_email: str = Depends
             db.add(order_item)
 
         #completely clear out the users temporary shopping cart records
-        db.query(Carts).filter(Carts.user_id == user.id).delete()
+        db.query(Carts).filter(Carts.user_id == current_user_email.id).delete()
         
         #commit item snapshotting and cart clearance simultaneously
         db.commit()
         db.refresh(new_order)
-        logger.info(f"Order placed by {user.email}. Order ID: {new_order.id}, Amount: {new_order.total_amount}")
+        logger.info(f"Order placed by {current_user_email.email}. Order ID: {new_order.id}, Amount: {new_order.total_amount}")
         return new_order
     
     except HTTPException:
@@ -70,9 +70,9 @@ def place_order(db: Session = Depends(get_db), current_user_email: str = Depends
         )
     
 @router.get("/{order_id}", response_model=OrderResponse, status_code=status.HTTP_200_OK)
-def get_single_order(order_id: int, db: Session =Depends(get_db), current_user_email: str =Depends(get_current_user)):
-    user =db.query(User).filter(User.email ==current_user_email).first()
-    if not user:
+def get_single_order(order_id: int, db: Session =Depends(get_db), current_user_email: User =Depends(get_current_user)):
+    # user =db.query(User).filter(User.email ==current_user_email).first()
+    if not current_user_email:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
     order = db.query(Order).filter(Order.id ==order_id).first()
@@ -82,21 +82,21 @@ def get_single_order(order_id: int, db: Session =Depends(get_db), current_user_e
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found")
         
 
-    if order.user_id !=user.id:
+    if order.user_id !=current_user_email.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to view this order")
 
     return order
 
 @router.get("/", response_model=OrderHistoryResponse, status_code=status.HTTP_200_OK)
-def get_order_history(db: Session = Depends(get_db), current_user_email: str =Depends(get_current_user)):
-    user =db.query(User).filter(User.email == current_user_email).first()
-    if not user:
+def get_order_history(db: Session = Depends(get_db), current_user_email: User =Depends(get_current_user)):
+    # user =db.query(User).filter(User.email == current_user_email).first()
+    if not current_user_email:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
 
-    orders =db.query(Order).filter(Order.user_id ==user.id).order_by(Order.created_at.desc()).all()
+    orders =db.query(Order).filter(Order.user_id ==current_user_email.id).order_by(Order.created_at.desc()).all()
 
-    total_orders_count=db.query(Order).filter(Order.user_id == user.id).count()
+    total_orders_count=db.query(Order).filter(Order.user_id == current_user_email.id).count()
     
 
     return {
@@ -105,8 +105,8 @@ def get_order_history(db: Session = Depends(get_db), current_user_email: str =De
     }
 
 @router.patch("/{order_id}/status_info",status_code=status.HTTP_200_OK)
-def update_order_status(order_id:int,status_info:OrderStatusUpdate,db:Session=Depends(get_db),current_user_email:str=Depends(get_current_user)):
-    user = db.query(User).filter(User.email == current_user_email).first()
+def update_order_status(order_id:int,status_info:OrderStatusUpdate,db:Session=Depends(get_db),current_user_email:User=Depends(get_current_user)):
+    # user = db.query(User).filter(User.email == current_user_email).first()
     order=db.query(Order).filter(Order.id==order_id).first()
     if not order:
         raise HTTPException(
@@ -120,7 +120,7 @@ def update_order_status(order_id:int,status_info:OrderStatusUpdate,db:Session=De
     
     food_item = db.query(FoodItem).filter(FoodItem.id == first_item.food_item_id).first()
     staff = db.query(Restaurant).filter(Restaurant.id == food_item.restaurantID).first()
-    if staff.owner_id!=user.id:
+    if staff.owner_id!=current_user_email.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not authorized to update status this order"
@@ -128,7 +128,7 @@ def update_order_status(order_id:int,status_info:OrderStatusUpdate,db:Session=De
     order.status = status_info.status.value
     db.commit()
     db.refresh(order)
-    logger.info(f"Order {order_id} status updated to {order.status} by user {user.email}")
+    logger.info(f"Order {order_id} status updated to {order.status} by user {current_user_email.email}")
     return {
         "message": "Order status updated",
         "order_id": order.id,

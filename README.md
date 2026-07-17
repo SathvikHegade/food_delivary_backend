@@ -160,6 +160,10 @@ The API will be available at `http://127.0.0.1:8000`. Interactive docs at `http:
 - **OrderItem** -- id, order_id (FK -> Order), food_item_id (FK -> FoodItem), quantity, price
 
 ---
+## Pytest
+
+--$env:PYTHONPATH="application"; pytest -v
+
 
 ## License
 

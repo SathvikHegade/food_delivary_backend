@@ -10,9 +10,9 @@ from models.users import User
 router=APIRouter()
 
 @router.post("/",status_code=status.HTTP_201_CREATED)
-def add_to_cart(cart_item:cartCreate,db:Session=Depends(get_db),current_user_email:str=Depends(get_current_user)):
-    user = db.query(User).filter(User.email == current_user_email).first()
-    if not user:
+def add_to_cart(cart_item:cartCreate,db:Session=Depends(get_db),current_user_email:User=Depends(get_current_user)):
+    # user = db.query(User).filter(User.email == current_user_email).first()
+    if not current_user_email:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="User not found"
@@ -25,7 +25,7 @@ def add_to_cart(cart_item:cartCreate,db:Session=Depends(get_db),current_user_ema
             detail=f"Food item with id {cart_item.food_item_id} does not exist"
         )
     
-    existing_item=db.query(Carts).filter(Carts.user_id==user.id,Carts.food_item_id==cart_item.food_item_id).first()
+    existing_item=db.query(Carts).filter(Carts.user_id==current_user_email.id,Carts.food_item_id==cart_item.food_item_id).first()
     if existing_item:
         existing_item.quantity += cart_item.quantity
         db.commit()
@@ -33,7 +33,7 @@ def add_to_cart(cart_item:cartCreate,db:Session=Depends(get_db),current_user_ema
         return {"message":"Cart item quantity updated successfully"}
     
     new_cart_entry = Carts(
-        user_id=user.id,
+        user_id=current_user_email.id,
         food_item_id=cart_item.food_item_id,
         quantity=cart_item.quantity
     )
@@ -44,14 +44,14 @@ def add_to_cart(cart_item:cartCreate,db:Session=Depends(get_db),current_user_ema
     return {"message": "Item added to cart successfully"}
 
 @router.get("/", response_model=CartDisplayResponse, status_code=status.HTTP_200_OK)
-def view_my_cart(db: Session = Depends(get_db), current_user_email: str = Depends(get_current_user)):
+def view_my_cart(db: Session = Depends(get_db), current_user_email: User = Depends(get_current_user)):
     # 1. Resolve the logged-in user from token email
-    user = db.query(User).filter(User.email == current_user_email).first()
-    if not user:
+    # user = db.query(User).filter(User.email == current_user_email).first()
+    if not current_user_email:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found or not authorized to view")
 
 
-    cart_items =db.query(Carts, FoodItem).join(FoodItem, Carts.food_item_id == FoodItem.id).filter(Carts.user_id == user.id).all()
+    cart_items =db.query(Carts, FoodItem).join(FoodItem, Carts.food_item_id == FoodItem.id).filter(Carts.user_id == current_user_email.id).all()
 
     formatted_items =[]
     grand_total_price =0.0
@@ -73,12 +73,12 @@ def view_my_cart(db: Session = Depends(get_db), current_user_email: str = Depend
     return CartDisplayResponse(items=formatted_items, grand_total_price=grand_total_price)
 
 @router.delete("/{food_item_id}",status_code=status.HTTP_200_OK)
-def remove_from_cart(food_item_id:int,db:Session=Depends(get_db),current_user_email:str=Depends(get_current_user)):
-    user=db.query(User).filter(User.email==current_user_email).first()
-    if not user:
+def remove_from_cart(food_item_id:int,db:Session=Depends(get_db),current_user_email:User=Depends(get_current_user)):
+    # user=db.query(User).filter(User.email==current_user_email).first()
+    if not current_user_email:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,detail="user not found")
 
-    cart_item=db.query(Carts).filter(Carts.user_id==user.id,Carts.food_item_id==food_item_id).first()
+    cart_item=db.query(Carts).filter(Carts.user_id==current_user_email.id,Carts.food_item_id==food_item_id).first()
     if not cart_item:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -90,12 +90,12 @@ def remove_from_cart(food_item_id:int,db:Session=Depends(get_db),current_user_em
     return {"message": "Item removed from cart successfully"}
 
 @router.patch("/{food_item_id}/increase", status_code=status.HTTP_200_OK)
-def increase_cart_quantity(food_item_id: int, db: Session = Depends(get_db), current_user_email: str = Depends(get_current_user)):
-    user = db.query(User).filter(User.email == current_user_email).first()
-    if not user:
+def increase_cart_quantity(food_item_id: int, db: Session = Depends(get_db), current_user_email: User = Depends(get_current_user)):
+    # user = db.query(User).filter(User.email == current_user_email).first()
+    if not current_user_email:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
-    cart_item = db.query(Carts).filter(Carts.user_id == user.id, Carts.food_item_id == food_item_id).first()
+    cart_item = db.query(Carts).filter(Carts.user_id == current_user_email.id, Carts.food_item_id == food_item_id).first()
     if not cart_item:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Item not found in your cart")
 
@@ -108,14 +108,14 @@ def increase_cart_quantity(food_item_id: int, db: Session = Depends(get_db), cur
 
 
 @router.patch("/{food_item_id}/decrease", status_code=status.HTTP_200_OK)
-def decrease_cart_quantity(food_item_id: int, db: Session = Depends(get_db), current_user_email: str = Depends(get_current_user)):
+def decrease_cart_quantity(food_item_id: int, db: Session = Depends(get_db), current_user_email: User = Depends(get_current_user)):
     #resolve logged-in user
-    user = db.query(User).filter(User.email == current_user_email).first()
-    if not user:
+    # user = db.query(User).filter(User.email == current_user_email).first()
+    if not current_user_email:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
     #find the item in the users cart
-    cart_item = db.query(Carts).filter(Carts.user_id == user.id, Carts.food_item_id == food_item_id).first()
+    cart_item = db.query(Carts).filter(Carts.user_id == current_user_email.id, Carts.food_item_id == food_item_id).first()
     if not cart_item:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Item not found in your cart")
 

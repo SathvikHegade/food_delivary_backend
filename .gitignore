@@ -113,3 +113,9 @@ desktop.ini
 logs/
 *.pid
 *.seed
+
+
+
+__pycache__/
+*.pyc
+.pytest_cache/
