@@ -8,6 +8,8 @@ from models.users import User
 from models.food_items import FoodItem 
 from schemas.order import OrderResponse, OrderHistoryResponse
 from auth.oauth2 import get_current_user
+from models.restaurant import Restaurant
+from schemas.order import OrderStatusUpdate
 
 router = APIRouter()
 
@@ -98,4 +100,35 @@ def get_order_history(db: Session = Depends(get_db), current_user_email: str =De
     return {
         "total_orders": total_orders_count,
         "orders": orders
+    }
+
+@router.patch("/{order_id}/status_info",status_code=status.HTTP_200_OK)
+def update_order_status(order_id:int,status_info:OrderStatusUpdate,db:Session=Depends(get_db),current_user_email:str=Depends(get_current_user)):
+    user = db.query(User).filter(User.email == current_user_email).first()
+    order=db.query(Order).filter(Order.id==order_id).first()
+    if not order:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="order not found"
+        )
+
+    first_item = db.query(OrderItem).filter(OrderItem.order_id == order.id).first()
+    if not first_item:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Order has no items")
+    
+    food_item = db.query(FoodItem).filter(FoodItem.id == first_item.food_item_id).first()
+    staff = db.query(Restaurant).filter(Restaurant.id == food_item.restaurantID).first()
+    if staff.owner_id!=user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to update status this order"
+        )
+    order.status = status_info.status.value
+    db.commit()
+    db.refresh(order)
+
+    return {
+        "message": "Order status updated",
+        "order_id": order.id,
+        "status": order.status
     }

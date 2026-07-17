@@ -12,5 +12,8 @@ class Restaurant(Base):
     owner_id=Column(Integer, ForeignKey("user.id", ondelete="cascade"), nullable=False)
 
     owner=relationship("User")
-    foods = relationship("FoodItem", back_populates="restaurantAttribute",cascade="all, delete-orphan")
+    foods=relationship("FoodItem", back_populates="restaurantAttribute",cascade="all, delete-orphan")
+
+    image_url=Column(String, nullable=True)
+    cover_image=Column(String, nullable=True)
 

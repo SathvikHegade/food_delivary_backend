@@ -1,5 +1,5 @@
 from typing import List
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from schemas.restaurant import Restaurant_create, restaurant_update
 from database import get_db
 from sqlalchemy.orm import Session
@@ -8,6 +8,8 @@ from auth.oauth2 import get_current_user
 from models.users import User
 from schemas.food_items import FoodItemCreate, FoodItemResponse
 from models.food_items import FoodItem
+import shutil
+import os
 
 
 router = APIRouter()
@@ -37,13 +39,67 @@ def review(loading:Restaurant_create, db:Session=Depends(get_db), current_user:s
         "restaurant": new_restaurant
     }
 
+@router.patch("/{restaurant_id}/image")
+def upload_restaurant_image(restaurant_id:int,file:UploadFile=File(...),db:Session=Depends(get_db),current_user:str=Depends(get_current_user)):
+    user=db.query(User).filter(User.email == current_user).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    restaurant=db.query(Restaurant).filter(Restaurant.id == restaurant_id).first()
+    if not restaurant:
+        raise HTTPException(status_code=404, detail="restaurant not found")
+        
+    if restaurant.owner_id!=user.id:
+        raise HTTPException(
+            status_code=403, 
+            detail="you are not authorized to add pictures/logo to this restaurant."
+        )
+
+    #save the file locally
+    upload_dir="static/images"
+    os.makedirs(upload_dir, exist_ok=True)
+    file_path=f"{upload_dir}/{restaurant_id}_{file.filename}"
+    
+    with open(file_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+    
+    restaurant.image_url=file_path
+    db.commit()
+    
+    return {"message":"Image uploaded successfully","path": file_path}  
+
 
 @router.get("/")
-def restaurents(db:Session=Depends(get_db)):
-    response=db.query(Restaurant).all()
-    return {"response":response}
+def get_restaurants(db: Session = Depends(get_db), page: int = 1, limit: int = 10):
+    #calculate how many items to skip
+    skip=(page-1)*limit
+    
+    #fetch the slice of data
+    restaurants = db.query(Restaurant).offset(skip).limit(limit).all()
+    
+    #get the total count for the frontend (optional but highly recommended)
+    total_restaurants = db.query(Restaurant).count()
+    
+    return {
+        "page": page,
+        "limit": limit,
+        "total": total_restaurants,
+        "restaurants": restaurants
+    }
 
-               
+@router.get("/search")
+def search_restaurants(name:str=None,min_rating:float=None,location:str=None,db:Session=Depends(get_db)):
+    #The .ilike() filter makes the search case-insensitive
+    #%name% acts as a wildcard, finding the string anywhere in the name
+    
+    query = db.query(Restaurant)
+    if name:
+        query = query.filter(Restaurant.name.ilike(f"%{name}%"))
+    if min_rating:
+        query = query.filter(Restaurant.rating >= min_rating)
+    if location:
+        query = query.filter(Restaurant.location.ilike(f"%{location}%"))
+    return query.all()
+            
 
 @router.get("/{restaurant_id}")
 def get_restaurant(restaurant_id: int, db: Session = Depends(get_db)):
@@ -106,13 +162,13 @@ def create_food_item(restaurant_id: int, food_item: FoodItemCreate, db: Session 
     if not restaurant:
         raise HTTPException(status_code=404, detail="restaurant not found")
         
-    if restaurant.owner_id != user.id:
+    if restaurant.owner_id!=user.id:
         raise HTTPException(
             status_code=403, 
             detail="you are not authorized to add menu items to this restaurant."
         )
 
-    new_food_item = FoodItem(**food_item.model_dump(), restaurantID=restaurant_id)
+    new_food_item=FoodItem(**food_item.model_dump(), restaurantID=restaurant_id)
     db.add(new_food_item)
     db.commit()
     db.refresh(new_food_item)
@@ -129,3 +185,4 @@ def get_restaurant_menu(restaurant_id: int, db: Session = Depends(get_db)):
         
     menu_items=db.query(FoodItem).filter(FoodItem.restaurantID==restaurant_id).all()
     return menu_items
+

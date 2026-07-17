@@ -1,6 +1,7 @@
 from pydantic import BaseModel, model_validator
 from typing import List
 from datetime import datetime
+from enum import Enum
 
 class OrderItemResponse(BaseModel):
     food_item_id: int
@@ -40,3 +41,14 @@ class OrderHistorySummary(BaseModel):
 class OrderHistoryResponse(BaseModel):
     total_orders: int
     orders: List[OrderHistorySummary]
+
+class OrderStatus(str, Enum):
+    PLACED = "PLACED"
+    CONFIRMED = "CONFIRMED"
+    PREPARING = "PREPARING"
+    OUT_FOR_DELIVERY = "OUT_FOR_DELIVERY"
+    DELIVERED = "DELIVERED"
+    CANCELLED = "CANCELLED"
+
+class OrderStatusUpdate(BaseModel):
+    status: OrderStatus
