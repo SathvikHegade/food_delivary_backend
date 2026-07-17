@@ -10,6 +10,7 @@ from schemas.order import OrderResponse, OrderHistoryResponse
 from auth.oauth2 import get_current_user
 from models.restaurant import Restaurant
 from schemas.order import OrderStatusUpdate
+from logger import logger
 
 router = APIRouter()
 
@@ -51,7 +52,7 @@ def place_order(db: Session = Depends(get_db), current_user_email: str = Depends
         #commit item snapshotting and cart clearance simultaneously
         db.commit()
         db.refresh(new_order)
-
+        logger.info(f"Order placed by {user.email}. Order ID: {new_order.id}, Amount: {new_order.total_amount}")
         return new_order
     
     except HTTPException:
@@ -61,6 +62,7 @@ def place_order(db: Session = Depends(get_db), current_user_email: str = Depends
         
     except Exception as e:
         #catch unexpected database errors
+        logger.error(f"Something went wrong: {str(e)}") #this triggers the log!
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -94,7 +96,7 @@ def get_order_history(db: Session = Depends(get_db), current_user_email: str =De
 
     orders =db.query(Order).filter(Order.user_id ==user.id).order_by(Order.created_at.desc()).all()
 
-    total_orders_count =len(orders)
+    total_orders_count=db.query(Order).filter(Order.user_id == user.id).count()
     
 
     return {
@@ -126,7 +128,7 @@ def update_order_status(order_id:int,status_info:OrderStatusUpdate,db:Session=De
     order.status = status_info.status.value
     db.commit()
     db.refresh(order)
-
+    logger.info(f"Order {order_id} status updated to {order.status} by user {user.email}")
     return {
         "message": "Order status updated",
         "order_id": order.id,

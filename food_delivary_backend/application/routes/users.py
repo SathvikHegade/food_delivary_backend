@@ -8,6 +8,7 @@ from schemas.users import UserCreate, UserResponse
 
 from auth.JWT_Handler import create_access_token
 from fastapi.security import OAuth2PasswordRequestForm
+from logger import logger
 
 router=APIRouter()
 hashing_pwd= CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -38,7 +39,7 @@ def signup(user_data:UserCreate,db:Session=Depends(get_db)):
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
-
+    logger.info(f"New user registered: {new_user.email}")
     return new_user
 
 @router.post("/login")
@@ -60,7 +61,13 @@ def login(user_credential:OAuth2PasswordRequestForm = Depends(),db:Session=Depen
         )
     
 
+    # if not pwd_checker:
+    #     raise HTTPException(
+    #         status_code=status.HTTP_401_UNAUTHORIZED,
+    #         detail="Check your Password once"
+    #     )
     if not pwd_checker:
+        logger.warning(f"Failed login attempt for user: {user_credential.username}") # Add this
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Check your Password once"
@@ -69,6 +76,7 @@ def login(user_credential:OAuth2PasswordRequestForm = Depends(),db:Session=Depen
     token_data={"sub": Acc_checker.email}
     access_token = create_access_token(data=token_data)
     
+    logger.info(f"User logged in: {user_credential.username}")
 
     return{
         "access_token": access_token, 

@@ -10,6 +10,7 @@ from schemas.food_items import FoodItemCreate, FoodItemResponse
 from models.food_items import FoodItem
 import shutil
 import os
+from logger import logger
 
 
 router = APIRouter()

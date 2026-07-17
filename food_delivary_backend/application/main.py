@@ -6,7 +6,7 @@ from models.food_items import FoodItem
 from models.cart import Carts
 from models.order import Order
 from models.order_item import OrderItem
-
+from logger import logger
 
 Base.metadata.create_all(bind=engine)
 
