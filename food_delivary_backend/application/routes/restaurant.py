@@ -86,7 +86,8 @@ def upload_restaurant_image(restaurant_id:int, file:UploadFile=File(...), db:Ses
 
 
 @router.get("/",summary="Get all restaurants", description="Returns a paginated list of all registered restaurants.")
-def get_restaurants(db: Session = Depends(get_db), page: int = 1, limit: int = 10):
+def get_restaurants(db: Session = Depends(get_db), page: int = 1):
+    limit=10
     #calculate how many items to skip
     skip=(page-1)*limit
     
@@ -103,19 +104,18 @@ def get_restaurants(db: Session = Depends(get_db), page: int = 1, limit: int = 1
         "restaurants": restaurants
     }
 
-@router.get("/search",summary="Search restaurants", description="Filter restaurants by name, minimum rating, or location.")
-def search_restaurants(name:str=None,min_rating:float=None,location:str=None,db:Session=Depends(get_db)):
-    #The .ilike() filter makes the search case-insensitive
-    #%name% acts as a wildcard, finding the string anywhere in the name
-    
+@router.get("/search", summary="Search restaurants", description="Filter restaurants by name, minimum rating, or location.")
+def search_restaurants(name: str = None,min_rating: float = None,location: str = None,limit: int = 20,db: Session = Depends(get_db)):
+    limit = min(limit, 100)
+
     query = db.query(Restaurant)
     if name:
         query = query.filter(Restaurant.name.ilike(f"%{name}%"))
-    if min_rating:
-        query = query.filter(Restaurant.rating >= min_rating)
+    if min_rating is not None:
+        query = query.filter(Restaurant.rating >= min_rating,Restaurant.rating <=5)
     if location:
         query = query.filter(Restaurant.location.ilike(f"%{location}%"))
-    return query.all()
+    return query.limit(limit).all()
             
 
 @router.get("/{restaurant_id}",summary="Get restaurant by ID", description="Returns details of a specific restaurant.")
