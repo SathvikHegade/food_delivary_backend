@@ -167,4 +167,4 @@ The API will be available at `http://127.0.0.1:8000`. Interactive docs at `http:
 
 ## License
 
-This project is open source and available under the [MIT License](LICENSE).
+MIT © 2026 Sathvik Hegade — see LICENSE for details.
