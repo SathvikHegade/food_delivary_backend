@@ -46,10 +46,6 @@ flowchart LR
 
 For **Zoom In, Zoom Out, Pan Left/Right, Pan Up/Down, Reset and Full Screen**, open:
 
-**[Open Interactive Architecture Viewer](./docs/architecture.html)**
-
-GitHub renders Mermaid diagrams natively, but does not allow JavaScript controls inside `README.md`. The separate viewer provides the interactive controls.
-
 ---
 
 # 🔄 API Request Flow
