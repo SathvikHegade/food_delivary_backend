@@ -19,6 +19,8 @@ from models.order import Order
 from models.order_item import OrderItem
 from redis_client import redis_client
 import json
+import uuid
+import asyncio
 
 
 router = APIRouter()
@@ -122,18 +124,40 @@ def search_restaurants(name: str = None,min_rating: float = None,location: str =
 
 @router.get("/{restaurant_id}",summary="Get restaurant by ID", description="Returns details of a specific restaurant.")
 async def get_restaurant(restaurant_id: int, db: Session = Depends(get_db)):
-        key=f"restaurant:{restaurant_id}"
-        cached=await redis_client.get(key)
-        if cached:
-            return json.loads(cached)
-        
+    key=f"restaurant:{restaurant_id}"
+    cached=await redis_client.get(key)
+    if cached:
+        return json.loads(cached)
+
+    unique_id_for_REDIS_LOCK=uuid.uuid4()
+    redis_lock_Token=str(unique_id_for_REDIS_LOCK)
+
+    Lock_key=f"lock:restaurant:{restaurant_id}"
+    aquired=await redis_client.set(Lock_key,redis_lock_Token,nx=True,ex=10)
+
+
+
+    if not aquired:
+
+        for _ in range(15):
+            await asyncio.sleep(0.1)
+            cached=await redis_client.get(key)
+            if cached:
+                return json.loads(cached)
+                
+        raise HTTPException(
+            status_code=503,
+            detail="unable to retrieve restaurant at this time"
+        )
+
+    try:
         restaurant=db.query(Restaurant).filter(Restaurant.id == restaurant_id).first()
         if restaurant is None:
             raise HTTPException(
                 status_code=404,
                 detail="restaurant not found"
             )
-        
+                    
         restaurant_data = {
             "id": restaurant.id,
             "name": restaurant.name,
@@ -141,12 +165,25 @@ async def get_restaurant(restaurant_id: int, db: Session = Depends(get_db)):
             "rating": restaurant.rating,
             "owner_id": restaurant.owner_id,
             "image_url": restaurant.image_url,
-             "cover_image": restaurant.cover_image
+            "cover_image": restaurant.cover_image
         }
         dict_to_json=json.dumps(restaurant_data)
         await redis_client.set(key,dict_to_json,ex=60)
+    
         # return db.query(Restaurant).filter(Restaurant.id == restaurant_id).first()
-        return restaurant_data
+    finally:
+        unlock_script = """
+        if redis.call("get", KEYS[1]) == ARGV[1] then
+            return redis.call("del", KEYS[1])
+        else
+            return 0
+        end
+        """
+
+
+        await redis_client.eval(unlock_script,1,Lock_key,redis_lock_Token)
+
+    return restaurant_data
 
 
 @router.delete("/{restaurant_id}",status_code=status.HTTP_204_NO_CONTENT,summary="Delete a restaurant")
@@ -230,18 +267,13 @@ def get_restaurant_menu(restaurant_id: int, db: Session = Depends(get_db)):
     return menu_items
 
 @router.post("/{restaurant_id}/reviews", status_code=status.HTTP_201_CREATED)
-def add_review(
-    restaurant_id: int, 
-    review_data: ReviewCreate, 
-    db: Session = Depends(get_db), 
-    current_user: User = Depends(get_current_user)
-):
-    # 1. Verify restaurant exists
+async def add_review(restaurant_id: int, review_data: ReviewCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    #verify restaurant exists
     restaurant = db.query(Restaurant).filter(Restaurant.id == restaurant_id).first()
     if not restaurant:
         raise HTTPException(status_code=404, detail="Restaurant not found")
 
-    # 2. Verified Purchase Check: Did they order from here?
+    #verified Purchase Check: Did they order from here?
     has_ordered = db.query(Order).join(OrderItem).join(FoodItem).filter(
         Order.user_id == current_user.id,
         FoodItem.restaurantID == restaurant_id,
@@ -254,7 +286,7 @@ def add_review(
             detail="You must have a completed order from this restaurant to leave a review."
         )
 
-    # 3. Create and add review
+    #create and add review
     new_review = Review(
         restaurant_id=restaurant_id, 
         user_id=current_user.id, 
@@ -273,4 +305,7 @@ def add_review(
 
     db.commit()
     db.refresh(restaurant)
+
+    key=f"restaurant:{restaurant_id}"
+    await redis_client.delete(key)
     return {"message": "Review added successfully", "new_rating": restaurant.rating}
