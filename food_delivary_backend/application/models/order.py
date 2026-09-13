@@ -6,8 +6,8 @@ from schemas.order import OrderStatusUpdate,OrderStatus
 
 class Order(Base):
     __tablename__="order_table"
-    id=Column(Integer,primary_key=True,index=True)
-    user_id=Column(Integer,ForeignKey("user.id",ondelete="CASCADE"),nullable=False)
+    id=Column(Integer,primary_key=True)
+    user_id=Column(Integer,ForeignKey("user.id",ondelete="CASCADE"),nullable=False,index=True)
     total_amount=Column(Float,nullable=False)
     status=Column(String,nullable=False,default=OrderStatus.PLACED.value)
     created_at=Column(DateTime,nullable=False,default=datetime.datetime.utcnow)

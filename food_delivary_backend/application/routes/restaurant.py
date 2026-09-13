@@ -13,10 +13,12 @@ import os
 from logger import logger
 import uuid
 from sqlalchemy import func
-from models.users import Review # Ensure this import is at the top
+from models.users import Review
 from schemas.restaurant import ReviewCreate
 from models.order import Order
 from models.order_item import OrderItem
+from redis_client import redis_client
+import json
 
 
 router = APIRouter()
@@ -35,7 +37,7 @@ def review(loading:Restaurant_create, db:Session=Depends(get_db), current_user:U
         name=loading.name,
         location=loading.location,
         rating=0.0,
-        owner_id=current_user.id # current_user is already the User object
+        owner_id=current_user.id #current_user is already the User object
     )
 
     db.add(new_restaurant)
@@ -119,8 +121,32 @@ def search_restaurants(name: str = None,min_rating: float = None,location: str =
             
 
 @router.get("/{restaurant_id}",summary="Get restaurant by ID", description="Returns details of a specific restaurant.")
-def get_restaurant(restaurant_id: int, db: Session = Depends(get_db)):
-    return db.query(Restaurant).filter(Restaurant.id == restaurant_id).first()
+async def get_restaurant(restaurant_id: int, db: Session = Depends(get_db)):
+        key=f"restaurant:{restaurant_id}"
+        cached=await redis_client.get(key)
+        if cached:
+            return json.loads(cached)
+        
+        restaurant=db.query(Restaurant).filter(Restaurant.id == restaurant_id).first()
+        if restaurant is None:
+            raise HTTPException(
+                status_code=404,
+                detail="restaurant not found"
+            )
+        
+        restaurant_data = {
+            "id": restaurant.id,
+            "name": restaurant.name,
+            "location": restaurant.location,
+            "rating": restaurant.rating,
+            "owner_id": restaurant.owner_id,
+            "image_url": restaurant.image_url,
+             "cover_image": restaurant.cover_image
+        }
+        dict_to_json=json.dumps(restaurant_data)
+        await redis_client.set(key,dict_to_json,ex=60)
+        # return db.query(Restaurant).filter(Restaurant.id == restaurant_id).first()
+        return restaurant_data
 
 
 @router.delete("/{restaurant_id}",status_code=status.HTTP_204_NO_CONTENT,summary="Delete a restaurant")

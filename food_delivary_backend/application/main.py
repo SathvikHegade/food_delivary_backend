@@ -7,6 +7,7 @@ from models.cart import Carts
 from models.order import Order
 from models.order_item import OrderItem
 from logger import logger
+from redis_client import redis_client
 
 Base.metadata.create_all(bind=engine)
 
@@ -14,6 +15,11 @@ Base.metadata.create_all(bind=engine)
 
 app=FastAPI()
 
+@app.get("/redis-test")
+async def redis_test():
+    await redis_client.set("test:key","hello",ex=60)
+    value=await redis_client.get("test:key")
+    return {"value":value}
 
 
 @app.get("/")
