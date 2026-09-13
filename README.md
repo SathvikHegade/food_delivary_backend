@@ -458,19 +458,5 @@ This project gives you practical talking points around:
 | API Domain Map | [Open](./docs/api-map.html) |
 
 ---
-
-## ⚠️ Important
-
-The `README.md` is designed to render directly on GitHub using Mermaid.
-
-The interactive HTML diagrams provide the additional controls that GitHub Markdown itself cannot provide:
-
-**Zoom In · Zoom Out · Pan · Reset · Full Screen**
-
----
-
-## 👨‍💻 Author
-
-**Sathvik Hegade**
-
-GitHub: `https://github.com/SathvikHegade`
+# Maintainer
+T S Sathvik Hegade · sathvikhegade3@gmail.com · MIT License
