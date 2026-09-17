@@ -33,7 +33,7 @@ def signup(user_data:UserCreate,db:Session=Depends(get_db)):
     new_user=User(
         username=user_data.username,
         email=user_data.email,
-        password=hashed_pwd # Storing the hash string!
+        password=hashed_pwd #storing the hash string
     )
 
     db.add(new_user)
@@ -67,7 +67,7 @@ def login(user_credential:OAuth2PasswordRequestForm = Depends(),db:Session=Depen
     #         detail="Check your Password once"
     #     )
     if not pwd_checker:
-        logger.warning(f"Failed login attempt for user: {user_credential.username}") # Add this
+        logger.warning(f"Failed login attempt for user: {user_credential.username}") #Add this
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Check your Password once"
