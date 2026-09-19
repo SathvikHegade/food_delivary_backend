@@ -1,120 +1,270 @@
 # 🍔 Food Delivery Backend
 
-A production-style REST API backend for a food-delivery platform, built with **FastAPI**.
+A production-oriented REST API backend for a food delivery platform built with **FastAPI, PostgreSQL, SQLAlchemy and Redis**.
 
-> **Repository:** `food_delivary_backend`
-
-## ✨ What this project demonstrates
-
-- RESTful API design with FastAPI
-- User authentication and authorization
-- Restaurant management
-- Food-item management
-- Cart operations
-- Order creation and management
-- PostgreSQL database integration
-- SQLAlchemy ORM
-- Pydantic schemas
-- Docker-based development
-- Interactive API documentation
-- Clean backend layering
+The project has evolved from a basic REST API into a backend with **JWT authentication, authorisation, Redis caching, cache-stampede protection, distributed locking, sliding-window rate limiting, IP blocking, security email alerts, Dockerisation and automated testing**.
 
 ---
 
-## 🏗️ System Architecture
+## 🚀 Features
+
+### 👤 Authentication & Security
+- User registration and login
+- JWT-based authentication
+- bcrypt password hashing
+- Authentication and authorisation
+- Restaurant ownership validation
+- Sliding-window failed-login rate limiting
+- Temporary IP blocking
+- Security email alerts
+
+### 🍽️ Core Features
+- Restaurant CRUD and search
+- Food-item management
+- Cart management
+- Order management
+- Order history and status updates
+- Verified-purchase restaurant reviews
+- Automatic restaurant rating updates
+
+### ⚡ Redis & Performance
+- Restaurant response caching
+- TTL-based expiration
+- Cache invalidation
+- Cache-stampede protection
+- Distributed Redis locking
+- Atomic Redis Lua operations
+
+### 🐳 Infrastructure & Testing
+- Docker + Docker Compose
+- PostgreSQL container
+- Redis container
+- Pytest authentication tests
+- Swagger / OpenAPI documentation
+
+---
+
+# 🏗️ System Architecture
 
 ```mermaid
-flowchart LR
-    Client["Client / Frontend"] --> API["FastAPI Application"]
+flowchart TD
+    Client["Client / Frontend / Swagger"]
+    API["FastAPI Application"]
 
-    API --> Auth["Authentication"]
-    API --> Restaurant["Restaurant APIs"]
-    API --> Food["Food Item APIs"]
-    API --> Cart["Cart APIs"]
-    API --> Order["Order APIs"]
+    Client --> API
 
-    Auth --> DB[(PostgreSQL)]
+    API --> Auth["Authentication & JWT"]
+    API --> Restaurant["Restaurant Management"]
+    API --> Food["Food Items"]
+    API --> Cart["Cart Management"]
+    API --> Order["Order Management"]
+    API --> Review["Review System"]
+
+    Auth --> DB[("PostgreSQL")]
     Restaurant --> DB
     Food --> DB
     Cart --> DB
     Order --> DB
+    Review --> DB
 
-    API --> Docs["Swagger / OpenAPI"]
+    API --> Redis["Redis"]
+
+    Redis --> Cache["Caching"]
+    Redis --> Rate["Sliding Window Rate Limiter"]
+    Redis --> Lock["Distributed Lock"]
+    Redis --> Block["IP Blocking"]
+
+    Auth --> Email["Gmail SMTP"]
+    Block --> Email
+
+    API --> Docker["Docker"]
 ```
-
-### 🔎 Interactive architecture
-
-For **Zoom In, Zoom Out, Pan Left/Right, Pan Up/Down, Reset and Full Screen**, open:
 
 ---
 
-# 🔄 API Request Flow
+# 📈 Backend Development Evolution
 
 ```mermaid
-sequenceDiagram
-    participant C as Client
-    participant F as FastAPI
-    participant R as Router
-    participant S as Service / Logic
-    participant O as SQLAlchemy ORM
-    participant D as PostgreSQL
-
-    C->>F: HTTP Request
-    F->>R: Route matching
-    R->>S: Validate and process request
-    S->>O: Database operation
-    O->>D: SQL query
-    D-->>O: Database result
-    O-->>S: ORM objects
-    S-->>R: Response data
-    R-->>F: Serialized response
-    F-->>C: HTTP Response
+flowchart LR
+    A["Basic REST API"]
+    --> B["PostgreSQL + SQLAlchemy"]
+    --> C["JWT Authentication"]
+    --> D["Authorisation & Ownership"]
+    --> E["Cart & Order System"]
+    --> F["Review System"]
+    --> G["Redis Integration"]
+    --> H["Redis Caching"]
+    --> I["Cache Invalidation"]
+    --> J["Cache Stampede Protection"]
+    --> K["Distributed Redis Lock"]
+    --> L["Sliding Window Rate Limiter"]
+    --> M["IP Blocking"]
+    --> N["Security Email Alerts"]
+    --> O["Dockerisation"]
+    --> P["Automated Testing"]
 ```
-
-**Interactive version:** [Open API Request Flow Viewer](./docs/request-flow.html)
 
 ---
 
-# 🔐 Authentication Flow
+# 🔐 Login Security
 
 ```mermaid
-sequenceDiagram
-    participant U as User
-    participant API as FastAPI
-    participant AUTH as Auth Layer
-    participant DB as PostgreSQL
+flowchart TD
+    A["Login Request"] --> B["Rate Limit Dependency"]
 
-    U->>API: Signup / Login
-    API->>AUTH: Validate credentials
-    AUTH->>DB: Read / create user
-    DB-->>AUTH: User data
-    AUTH-->>API: Authentication result
-    API-->>U: Access token / response
+    B --> C{"IP Blocked?"}
+    C -->|Yes| D["429 Too Many Requests"]
+    C -->|No| E["Find User"]
 
-    U->>API: Protected API request
-    API->>AUTH: Validate token
-    AUTH-->>API: Authenticated user
-    API-->>U: Protected resource
+    E --> F{"User Exists?"}
+    F -->|No| G["Record Failed Attempt"]
+    F -->|Yes| H["Verify Password"]
+
+    G --> I["401 Unauthorized"]
+
+    H --> J{"Password Correct?"}
+    J -->|Yes| K["Generate JWT"]
+    K --> L["200 OK"]
+
+    J -->|No| M["Record Failed Attempt"]
+    M --> N{"5th Failure?"}
+
+    N -->|No| O["401 Unauthorized"]
+    N -->|Yes| P["Create Redis IP Block"]
+
+    P --> Q["Send Security Email"]
+    Q --> O
 ```
 
-**Interactive version:** [Open Authentication Flow Viewer](./docs/auth-flow.html)
+### Login behaviour
+
+```text
+Failed attempt #1 → 401
+Failed attempt #2 → 401
+Failed attempt #3 → 401
+Failed attempt #4 → 401
+Failed attempt #5 → 401 + IP Block + Security Email
+Next attempt       → 429
+```
 
 ---
 
-# 🗃️ Database / ER Diagram
+# ⚡ Redis Caching
+
+```mermaid
+flowchart TD
+    A["GET Restaurant"] --> B{"Redis Cache Hit?"}
+
+    B -->|Yes| C["Return Cached Data"]
+    B -->|No| D{"Acquire Distributed Lock"}
+
+    D -->|Lock Unavailable| E["Wait and Retry Redis"]
+    E --> B
+
+    D -->|Lock Acquired| F["Query PostgreSQL"]
+    F --> G["Store Result in Redis"]
+    G --> H["Release Redis Lock"]
+    H --> I["Return Restaurant"]
+```
+
+PostgreSQL remains the **source of truth**, while Redis acts as a fast cache and coordination layer.
+
+---
+
+# 🔒 Cache Stampede Protection
+
+```mermaid
+flowchart TD
+    A["Multiple Requests"] --> B["Redis Cache"]
+
+    B --> C{"Cache Hit?"}
+    C -->|Yes| D["Return Cached Data"]
+    C -->|No| E["Try Distributed Lock"]
+
+    E --> F{"Lock Acquired?"}
+    F -->|Yes| G["Query PostgreSQL"]
+    G --> H["Update Redis"]
+    H --> I["Release Lock"]
+
+    F -->|No| J["Wait / Retry Redis"]
+    J --> B
+
+    I --> D
+```
+
+Redis distributed locks prevent many concurrent requests from rebuilding the same expired cache entry.
+
+Implementation concepts:
+- `SET NX`
+- Lock TTL
+- Unique lock tokens
+- Atomic Lua compare-and-delete
+
+---
+
+# 🚦 Rate Limiting
+
+```mermaid
+flowchart TD
+    A["Login Request"] --> B["Extract Client IP"]
+    B --> C["Redis Sorted Set"]
+
+    C --> D["Remove Expired Attempts"]
+    D --> E["Add Current Attempt"]
+    E --> F["Count Attempts"]
+
+    F --> G{"Count >= Limit?"}
+
+    G -->|No| H["Allow Request"]
+    G -->|Yes| I["Create Temporary IP Block"]
+
+    I --> J["Future Requests → 429"]
+```
+
+The rate limiter uses a **Redis Sorted Set** and an **atomic Lua script** to perform the sliding-window operation safely under concurrent requests.
+
+---
+
+# 📧 Security Email Alerts
+
+```mermaid
+flowchart TD
+    A["Failed Login"] --> B["Redis Rate Limiter"]
+    B --> C{"Threshold Reached?"}
+
+    C -->|No| D["Continue"]
+    C -->|Yes| E["Create IP Block"]
+
+    E --> F["Security Alert"]
+    F --> G["Gmail SMTP"]
+    G --> H["Account Owner"]
+```
+
+The email is a **notification**, while Redis rate limiting and IP blocking provide the actual protection.
+
+---
+
+# 🗄️ Database Architecture
 
 ```mermaid
 erDiagram
-    USER ||--o{ CART : owns
+    USER ||--o{ RESTAURANT : owns
+    USER ||--o{ CART : has
     USER ||--o{ ORDER : places
-    RESTAURANT ||--o{ FOOD_ITEM : offers
-    CART ||--o{ FOOD_ITEM : contains
+    USER ||--o{ REVIEW : writes
+
+    RESTAURANT ||--o{ FOOD_ITEM : contains
+    RESTAURANT ||--o{ REVIEW : receives
+
+    CART ||--o{ CART_ITEM : contains
+    FOOD_ITEM ||--o{ CART_ITEM : added_to
+
     ORDER ||--o{ ORDER_ITEM : contains
-    FOOD_ITEM ||--o{ ORDER_ITEM : included_in
+    FOOD_ITEM ||--o{ ORDER_ITEM : ordered_as
 
     USER {
         int id PK
-        string name
+        string username
         string email
         string password
     }
@@ -122,7 +272,9 @@ erDiagram
     RESTAURANT {
         int id PK
         string name
-        string address
+        string location
+        float rating
+        int owner_id FK
     }
 
     FOOD_ITEM {
@@ -137,11 +289,18 @@ erDiagram
         int user_id FK
     }
 
+    CART_ITEM {
+        int id PK
+        int cart_id FK
+        int food_item_id FK
+        int quantity
+    }
+
     ORDER {
         int id PK
         int user_id FK
+        float total_amount
         string status
-        float total
     }
 
     ORDER_ITEM {
@@ -150,223 +309,88 @@ erDiagram
         int food_item_id FK
         int quantity
     }
-```
 
-**Interactive version:** [Open ER Diagram Viewer](./docs/er-diagram.html)
+    REVIEW {
+        int id PK
+        int user_id FK
+        int restaurant_id FK
+        float rating
+        string comment
+    }
+```
 
 ---
 
-# 🛒 Cart Workflow
+# ⭐ Review System
+
+```mermaid
+flowchart TD
+    A["Authenticated User"] --> B["Submit Review"]
+    B --> C{"Verified Purchase?"}
+
+    C -->|No| D["Reject Review"]
+    C -->|Yes| E["Create Review"]
+
+    E --> F["Calculate Average Rating"]
+    F --> G["Update Restaurant Rating"]
+    G --> H["Invalidate Redis Cache"]
+```
+
+---
+
+# 📦 Order Flow
+
+```mermaid
+flowchart TD
+    A["User"] --> B["Cart"]
+    B --> C["Place Order"]
+    C --> D["Create Order"]
+    D --> E["Order Placed"]
+    E --> F["Order Processing"]
+    F --> G["Status Updates"]
+    G --> H["Delivered"]
+
+    E -.-> I["Cancelled"]
+```
+
+---
+
+# 🔄 Request Lifecycle
+
+```mermaid
+flowchart TD
+    A["Client"] --> B["HTTP Request"]
+    B --> C["FastAPI"]
+    C --> D["Dependency Injection"]
+    D --> E["Request Validation"]
+    E --> F["Router"]
+    F --> G["Business Logic"]
+
+    G --> H["SQLAlchemy ORM"]
+    H --> I[("PostgreSQL")]
+
+    G --> J["Redis"]
+
+    G --> K["Response Schema"]
+    K --> L["HTTP Response"]
+    L --> A
+```
+
+---
+
+# 🐳 Docker Architecture
 
 ```mermaid
 flowchart LR
-    A["User"] --> B["Select Food"]
-    B --> C["Add to Cart"]
-    C --> D["Cart"]
-    D --> E["Increase / Decrease"]
-    E --> D
-    D --> F["Remove Item"]
-    D --> G["Checkout"]
+    Web["FastAPI Container"]
+    DB[("PostgreSQL Container")]
+    Redis[("Redis Container")]
+
+    Web --> DB
+    Web --> Redis
 ```
 
-**Interactive version:** [Open Cart Workflow Viewer](./docs/cart-flow.html)
-
----
-
-# 📦 Order Workflow
-
-```mermaid
-flowchart LR
-    A["Cart"] --> B["Create Order"]
-    B --> C["Order Placed"]
-    C --> D["Order Processing"]
-    D --> E["Order Status Updated"]
-    E --> F["Delivered"]
-
-    C -.-> X["Cancelled"]
-```
-
-**Interactive version:** [Open Order Workflow Viewer](./docs/order-flow.html)
-
----
-
-# 🧭 API Domain Map
-
-```mermaid
-flowchart TB
-    API["Food Delivery API"]
-
-    API --> AUTH["Authentication"]
-    API --> REST["Restaurants"]
-    API --> FOOD["Food Items"]
-    API --> CART["Cart"]
-    API --> ORDER["Orders"]
-
-    AUTH --> A1["Signup"]
-    AUTH --> A2["Login"]
-
-    REST --> R1["Create"]
-    REST --> R2["List"]
-    REST --> R3["Search"]
-    REST --> R4["Get"]
-    REST --> R5["Update"]
-    REST --> R6["Delete"]
-
-    FOOD --> F1["Create Food Item"]
-    FOOD --> F2["List Food Items"]
-
-    CART --> C1["View Cart"]
-    CART --> C2["Add Item"]
-    CART --> C3["Increase"]
-    CART --> C4["Decrease"]
-    CART --> C5["Remove"]
-
-    ORDER --> O1["Create Order"]
-    ORDER --> O2["List Orders"]
-    ORDER --> O3["Get Order"]
-    ORDER --> O4["Update Status"]
-```
-
-**Interactive version:** [Open API Map Viewer](./docs/api-map.html)
-
----
-
-# 📡 API Reference
-
-## Authentication
-
-| Method | Endpoint | Purpose |
-|---|---|---|
-| POST | `/auth/signup` | Register a user |
-| POST | `/auth/login` | Authenticate a user |
-
-## Restaurants
-
-| Method | Endpoint | Purpose |
-|---|---|---|
-| POST | `/restaurants` | Create restaurant |
-| GET | `/restaurants/` | List restaurants |
-| GET | `/restaurants/search` | Search restaurants |
-| GET | `/restaurants/{id}` | Get restaurant |
-| PUT | `/restaurants/{id}` | Update restaurant |
-| DELETE | `/restaurants/{id}` | Delete restaurant |
-| PATCH | `/restaurants/{id}/image` | Update restaurant image |
-
-## Food Items
-
-| Method | Endpoint | Purpose |
-|---|---|---|
-| POST | `/restaurants/{id}/food-items` | Create food item |
-| GET | `/restaurants/{id}/food-items` | List restaurant food items |
-
-## Cart
-
-| Method | Endpoint | Purpose |
-|---|---|---|
-| POST | `/cart/` | Add item to cart |
-| GET | `/cart/` | Get cart |
-| PATCH | `/cart/{food_item_id}/increase` | Increase quantity |
-| PATCH | `/cart/{food_item_id}/decrease` | Decrease quantity |
-| DELETE | `/cart/{food_item_id}` | Remove item |
-
-## Orders
-
-| Method | Endpoint | Purpose |
-|---|---|---|
-| POST | `/order/` | Create order |
-| GET | `/order/` | List orders |
-| GET | `/order/{order_id}` | Get order |
-| PATCH | `/order/{order_id}/status_info` | Update order status |
-
----
-
-# 📁 Project Structure
-
-```text
-food_delivary_backend/
-│
-├── app/
-│   ├── routers/
-│   ├── models/
-│   ├── schemas/
-│   ├── services/
-│   ├── database/
-│   └── main.py
-│
-├── tests/
-│
-├── docs/
-│   ├── architecture.html
-│   ├── request-flow.html
-│   ├── auth-flow.html
-│   ├── er-diagram.html
-│   ├── cart-flow.html
-│   ├── order-flow.html
-│   └── api-map.html
-│
-├── Dockerfile
-├── docker-compose.yml
-├── requirements.txt
-└── README.md
-```
-
----
-
-# 🚀 Running the Project
-
-## 1. Clone
-
-```bash
-git clone https://github.com/SathvikHegade/food_delivary_backend.git
-cd food_delivary_backend
-```
-
-## 2. Create virtual environment
-
-```bash
-python -m venv venv
-```
-
-### Windows
-
-```powershell
-venv\Scripts\activate
-```
-
-## 3. Install dependencies
-
-```bash
-pip install -r requirements.txt
-```
-
-## 4. Configure environment variables
-
-Create a `.env` file containing the database and authentication configuration required by the project.
-
-## 5. Start the application
-
-```bash
-uvicorn app.main:app --reload
-```
-
----
-
-# 📚 API Documentation
-
-Once the application is running:
-
-- Swagger UI: `/docs`
-- ReDoc: `/redoc`
-
-These interfaces make it easy to inspect endpoints and test API requests.
-
----
-
-# 🐳 Docker
-
-The project also contains Docker configuration for running the backend in a containerized environment.
-
-Typical workflow:
+Start the complete application with:
 
 ```bash
 docker compose up --build
@@ -374,85 +398,236 @@ docker compose up --build
 
 ---
 
-# 🧪 Testing
-
-Run the project's test suite with:
-
-```bash
-pytest
-```
-
----
-
-# 🧠 Backend Request Lifecycle
+# 🧱 Project Structure
 
 ```text
-Client
-  │
-  ▼
-HTTP Request
-  │
-  ▼
-FastAPI Router
-  │
-  ▼
-Validation
-  │
-  ▼
-Business Logic
-  │
-  ▼
-SQLAlchemy ORM
-  │
-  ▼
-PostgreSQL
-  │
-  ▼
-Database Result
-  │
-  ▼
-Pydantic Serialization
-  │
-  ▼
-HTTP Response
-  │
-  ▼
-Client
+food_delivary_backend/
+│
+├── application/
+│   ├── auth/
+│   │   ├── JWT_Handler.py
+│   │   └── rate_limiter.py
+│   │
+│   ├── models/
+│   ├── routes/
+│   ├── schemas/
+│   ├── services/
+│   │   └── email_service.py
+│   │
+│   ├── database.py
+│   ├── redis_client.py
+│   ├── logger.py
+│   └── main.py
+│
+├── tests/
+│   └── test_auth.py
+│
+├── Dockerfile
+├── docker-compose.yml
+├── requirements.txt
+├── .gitignore
+└── README.md
 ```
 
 ---
 
-# 🎯 Interview Value
+# 🛠️ Tech Stack
 
-This project gives you practical talking points around:
-
-- REST API architecture
-- FastAPI routing
-- Authentication
-- Dependency injection
-- ORM and relational databases
-- Data validation
-- CRUD operations
-- Cart and order workflows
-- Docker
-- API documentation
-- Database relationships
-- Backend request lifecycle
-
----
-
-# 🗺️ Interactive Diagram Gallery
-
-| Diagram | Interactive Viewer |
+| Technology | Purpose |
 |---|---|
-| System Architecture | [Open](./docs/architecture.html) |
-| API Request Flow | [Open](./docs/request-flow.html) |
-| Authentication | [Open](./docs/auth-flow.html) |
-| ER Diagram | [Open](./docs/er-diagram.html) |
-| Cart Workflow | [Open](./docs/cart-flow.html) |
-| Order Workflow | [Open](./docs/order-flow.html) |
-| API Domain Map | [Open](./docs/api-map.html) |
+| Python | Backend |
+| FastAPI | REST API |
+| PostgreSQL | Database |
+| SQLAlchemy | ORM |
+| Pydantic | Validation |
+| Redis | Cache, locking & rate limiting |
+| JWT | Authentication |
+| bcrypt | Password hashing |
+| Docker | Containerisation |
+| Docker Compose | Orchestration |
+| Pytest | Testing |
+| SMTP / Gmail | Security alerts |
+| Swagger / OpenAPI | API documentation |
 
 ---
-# Maintainer
-T S Sathvik Hegade · sathvikhegade3@gmail.com · MIT License
+
+# 📡 API Overview
+
+### Authentication
+
+| Method | Endpoint | Description |
+|---|---|---|
+| POST | `/auth/signup` | Register user |
+| POST | `/auth/login` | Login |
+
+### Restaurants
+
+| Method | Endpoint | Description |
+|---|---|---|
+| POST | `/restaurants` | Create restaurant |
+| GET | `/restaurants/` | List restaurants |
+| GET | `/restaurants/{id}` | Get restaurant |
+| PUT | `/restaurants/{id}` | Update restaurant |
+| DELETE | `/restaurants/{id}` | Delete restaurant |
+
+### Food Items
+
+| Method | Endpoint | Description |
+|---|---|---|
+| POST | `/restaurants/{id}/food-items` | Add food item |
+| GET | `/restaurants/{id}/food-items` | Get food items |
+
+### Cart
+
+| Method | Endpoint | Description |
+|---|---|---|
+| GET | `/cart/` | Get cart |
+| POST | `/cart/` | Add item |
+| PATCH | `/cart/{id}/increase` | Increase quantity |
+| PATCH | `/cart/{id}/decrease` | Decrease quantity |
+| DELETE | `/cart/{id}` | Remove item |
+
+### Orders
+
+| Method | Endpoint | Description |
+|---|---|---|
+| POST | `/order/` | Place order |
+| GET | `/order/` | Order history |
+| GET | `/order/{id}` | Order details |
+
+### Reviews
+
+| Method | Endpoint | Description |
+|---|---|---|
+| POST | `/restaurants/{id}/reviews` | Add review |
+
+For complete interactive API documentation, use Swagger.
+
+---
+
+# 🚀 Getting Started
+
+### 1. Clone
+
+```bash
+git clone https://github.com/SathvikHegade/food_delivary_backend.git
+cd food_delivary_backend
+```
+
+### 2. Configure environment variables
+
+Create a `.env` file:
+
+```env
+POSTGRES_USER=your_user
+POSTGRES_PASSWORD=your_password
+POSTGRES_DB=food_delivery
+
+DATABASE_URL=your_database_url
+SECRET_KEY=your_secret_key
+
+EMAIL_HOST=smtp.gmail.com
+EMAIL_PORT=587
+EMAIL_USERNAME=your_email
+EMAIL_PASSWORD=your_gmail_app_password
+```
+
+> ⚠️ Never commit real credentials or `.env` to GitHub.
+
+### 3. Start
+
+```bash
+docker compose up --build
+```
+
+Application:
+
+```text
+http://localhost:8000
+```
+
+Swagger:
+
+```text
+http://localhost:8000/docs
+```
+
+ReDoc:
+
+```text
+http://localhost:8000/redoc
+```
+
+---
+
+# 🧪 Testing
+
+Run:
+
+```bash
+pytest -v
+```
+
+PowerShell, if required:
+
+```powershell
+$env:PYTHONPATH="application"
+pytest -v
+```
+
+---
+
+# 🔐 Security Highlights
+
+- JWT authentication
+- bcrypt password hashing
+- Dependency-based authentication
+- Ownership-based authorisation
+- Redis sliding-window rate limiting
+- Atomic Redis Lua operations
+- Temporary IP blocking
+- Distributed Redis locks
+- Cache-stampede protection
+- Security email notifications
+- Environment-based secrets
+- Verified-purchase reviews
+
+---
+
+# 📚 Backend Concepts Demonstrated
+
+```mermaid
+flowchart TD
+    A["REST API Design"]
+    --> B["FastAPI"]
+    --> C["Dependency Injection"]
+    --> D["Authentication"]
+    --> E["Authorisation"]
+    --> F["PostgreSQL + SQLAlchemy"]
+    --> G["Redis"]
+    --> H["Caching"]
+    --> I["Cache Invalidation"]
+    --> J["Cache Stampede Protection"]
+    --> K["Distributed Locking"]
+    --> L["Rate Limiting"]
+    --> M["IP Blocking"]
+    --> N["Security Monitoring"]
+    --> O["Docker"]
+    --> P["Automated Testing"]
+```
+
+---
+
+# 👨‍💻 Author
+
+**T S Sathvik Hegade**
+
+Computer Science Engineering Student
+
+[GitHub](https://github.com/SathvikHegade)
+
+---
+
+## 📄 License
+
+This project is licensed under the MIT License.
