@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
 from passlib.context import CryptContext
 
@@ -9,6 +9,7 @@ from schemas.users import UserCreate, UserResponse
 from auth.JWT_Handler import create_access_token
 from fastapi.security import OAuth2PasswordRequestForm
 from logger import logger
+from auth.rate_limiter import check_rate_limit, record_failed_attempt
 
 router=APIRouter()
 hashing_pwd= CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -43,9 +44,10 @@ def signup(user_data:UserCreate,db:Session=Depends(get_db)):
     return new_user
 
 @router.post("/login")
-def login(user_credential:OAuth2PasswordRequestForm = Depends(),db:Session=Depends(get_db)):
+async def login(request:Request,user_credential:OAuth2PasswordRequestForm = Depends(),db:Session=Depends(get_db), _:None=Depends(check_rate_limit)):
     Acc_checker=db.query(User).filter(User.email==user_credential.username).first()
     if not Acc_checker:
+        await record_failed_attempt(request)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid Credentials"
@@ -68,6 +70,7 @@ def login(user_credential:OAuth2PasswordRequestForm = Depends(),db:Session=Depen
     #     )
     if not pwd_checker:
         logger.warning(f"Failed login attempt for user: {user_credential.username}") #Add this
+        await record_failed_attempt(request)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Check your Password once"
