@@ -10,6 +10,7 @@ from auth.JWT_Handler import create_access_token
 from fastapi.security import OAuth2PasswordRequestForm
 from logger import logger
 from auth.rate_limiter import check_rate_limit, record_failed_attempt
+from services.email_service import send_security_alert
 
 router=APIRouter()
 hashing_pwd= CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -70,7 +71,10 @@ async def login(request:Request,user_credential:OAuth2PasswordRequestForm = Depe
     #     )
     if not pwd_checker:
         logger.warning(f"Failed login attempt for user: {user_credential.username}") #Add this
-        await record_failed_attempt(request)
+        blocked=await record_failed_attempt(request,Acc_checker.email)
+        if blocked:
+            send_security_alert(Acc_checker.email)
+
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Check your Password once"
@@ -85,3 +89,5 @@ async def login(request:Request,user_credential:OAuth2PasswordRequestForm = Depe
         "access_token": access_token, 
         "token_type": "bearer"
     }
+
+

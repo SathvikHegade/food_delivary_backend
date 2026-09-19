@@ -20,7 +20,7 @@ async def check_rate_limit(request:Request):
 
 
 
-async def record_failed_attempt(request: Request):
+async def record_failed_attempt(request: Request,user_email=None):
     ip = get_client_ip(request)
 
     key = f"rate_limit:login:{ip}"
