@@ -23,10 +23,21 @@ def place_order(db: Session = Depends(get_db), current_user_email: User = Depend
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
         #grab all items in this users cart along with current food prices
-        cart_items = db.query(Carts, FoodItem).join(FoodItem, Carts.food_item_id == FoodItem.id).filter(Carts.user_id == current_user_email.id).all()
-        if not cart_items:
+        locked_cart_items = db.query(Carts).filter(Carts.user_id == current_user_email.id).with_for_update().all()
+
+        if not locked_cart_items:
+            raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Your shopping cart is empty"
+            )
+        food_ids=[val.food_item_id for val in locked_cart_items]
+        food_items = db.query(FoodItem).filter(FoodItem.id.in_(food_ids)).all()
+
+        if not food_items:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Your shopping cart is empty")
 
+        food_map = {food.id: food for food in food_items}
+        cart_items = [(cart, food_map[cart.food_item_id])for cart in locked_cart_items]
         #calculate total billing amount
         grand_total_price = sum(food.price * cart.quantity for cart, food in cart_items)
 
