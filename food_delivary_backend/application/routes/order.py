@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Header
 from sqlalchemy.orm import Session
 from database import get_db
 from models.cart import Carts 
@@ -15,12 +15,17 @@ from logger import logger
 router = APIRouter()
 
 @router.post("/", response_model=OrderResponse, status_code=status.HTTP_201_CREATED)
-def place_order(db: Session = Depends(get_db), current_user_email: User = Depends(get_current_user)):
+def place_order(Idempotency_key:str=Header(...),db: Session = Depends(get_db), current_user_email: User = Depends(get_current_user)):
     try:
         #fetch the logged in user profile
         # user = db.query(User).filter(User.email == current_user_email).first()
         if not current_user_email:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+        existing_order=db.query(Order).filter(Order.user_id==current_user_email.id, Order.idempotency_key==Idempotency_key).first()
+
+        if existing_order:
+            return existing_order
 
         #grab all items in this users cart along with current food prices
         locked_cart_items = db.query(Carts).filter(Carts.user_id == current_user_email.id).with_for_update().all()
@@ -42,7 +47,7 @@ def place_order(db: Session = Depends(get_db), current_user_email: User = Depend
         grand_total_price = sum(food.price * cart.quantity for cart, food in cart_items)
 
         #create and stage the master record inside order_table
-        new_order = Order(user_id=current_user_email.id, total_amount=grand_total_price, status="PLACED")
+        new_order = Order(user_id=current_user_email.id, total_amount=grand_total_price, idempotency_key=Idempotency_key, status="PLACED")
         db.add(new_order)
         
         db.flush()#flush() pushes changes to DB and grabs new_order.id WITHOUT committing yet
