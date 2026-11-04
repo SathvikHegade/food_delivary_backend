@@ -1,4 +1,4 @@
-from typing import List
+from typing import Awaitable, List, Optional, cast
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from schemas.restaurant import Restaurant_create, restaurant_update
 from database import get_db
@@ -10,7 +10,6 @@ from schemas.food_items import FoodItemCreate, FoodItemResponse
 from models.food_items import FoodItem
 import shutil
 import os
-from logger import logger
 import uuid
 from sqlalchemy import func
 from models.users import Review
@@ -19,7 +18,6 @@ from models.order import Order
 from models.order_item import OrderItem
 from redis_client import redis_client
 import json
-import uuid
 import asyncio
 
 
@@ -53,14 +51,11 @@ def review(loading:Restaurant_create, db:Session=Depends(get_db), current_user:U
 @router.patch("/{restaurant_id}/image")
 def upload_restaurant_image(restaurant_id:int, file:UploadFile=File(...), db:Session=Depends(get_db), current_user:User=Depends(get_current_user)):
     # user = db.query(User).filter(User.email == current_user).first()
-    if not current_user:
-        raise HTTPException(status_code=404, detail="User not found")
-    
     restaurant = db.query(Restaurant).filter(Restaurant.id == restaurant_id).first()
-    if not restaurant:
+    if restaurant is None:
         raise HTTPException(status_code=404, detail="restaurant not found")
         
-    if restaurant.owner_id!=current_user.id:
+    if getattr(restaurant, "owner_id") != current_user.id:
         raise HTTPException(
             status_code=403, 
             detail="you are not authorized to add pictures/logo to this restaurant."
@@ -68,6 +63,8 @@ def upload_restaurant_image(restaurant_id:int, file:UploadFile=File(...), db:Ses
 
     #save the file locally
     allowed_extensions = {".jpg", ".jpeg", ".png"}
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="An image file is required.")
     file_ext = os.path.splitext(file.filename)[1].lower()
     if file_ext not in allowed_extensions:
         raise HTTPException(status_code=400, detail="Only JPG and PNG images are allowed.")
@@ -83,7 +80,7 @@ def upload_restaurant_image(restaurant_id:int, file:UploadFile=File(...), db:Ses
         shutil.copyfileobj(file.file, buffer)
     
 
-    restaurant.image_url = file_path
+    setattr(restaurant, "image_url", file_path)
     db.commit()
     
     return {"message": "Image uploaded successfully", "path": file_path}  
@@ -109,7 +106,13 @@ def get_restaurants(db: Session = Depends(get_db), page: int = 1):
     }
 
 @router.get("/search", summary="Search restaurants", description="Filter restaurants by name, minimum rating, or location.")
-def search_restaurants(name: str = None,min_rating: float = None,location: str = None,limit: int = 20,db: Session = Depends(get_db)):
+def search_restaurants(
+    name: Optional[str] = None,
+    min_rating: Optional[float] = None,
+    location: Optional[str] = None,
+    limit: int = 20,
+    db: Session = Depends(get_db),
+):
     limit = min(limit, 100)
 
     query = db.query(Restaurant)
@@ -181,7 +184,10 @@ async def get_restaurant(restaurant_id: int, db: Session = Depends(get_db)):
         """
 
 
-        await redis_client.eval(unlock_script,1,Lock_key,redis_lock_Token)
+        await cast(
+            Awaitable[object],
+            redis_client.eval(unlock_script, 1, Lock_key, redis_lock_Token),
+        )
 
     return restaurant_data
 
@@ -191,10 +197,10 @@ def delete_restaurant(restaurant_id: int, db:Session=Depends(get_db), current_us
     # user = db.query(User).filter(User.email == current_user).first()
 
     deleteID=db.query(Restaurant).filter(Restaurant.id == restaurant_id).first()
-    if(not deleteID ):
+    if deleteID is None:
         raise HTTPException(status_code=404,detail="restaurant not found")
     
-    if deleteID.owner_id !=current_user.id:
+    if getattr(deleteID, "owner_id") != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You are not authorized to delete this restaurant. You do not own it!"
@@ -202,7 +208,6 @@ def delete_restaurant(restaurant_id: int, db:Session=Depends(get_db), current_us
     
     db.delete(deleteID)
     db.commit()
-    return {"message":"restaurant id="+str(restaurant_id)+" "+"deleted successfully by"+" "+str(current_user)}
 
 
 @router.put("/{restaurant_id}")
@@ -210,19 +215,19 @@ def update_restaurant(restaurant_id: int,UserInput:restaurant_update,db:Session=
     # user = db.query(User).filter(User.email == current_user).first()
 
     UpdateRes=db.query(Restaurant).filter(Restaurant.id == restaurant_id).first()
-    if(not UpdateRes):
+    if UpdateRes is None:
         raise HTTPException(status_code=404,detail="restaurant not found")
     
-    if UpdateRes.owner_id != current_user.id:
+    if getattr(UpdateRes, "owner_id") != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You are not authorized to modify this restaurant. You do not own it!"
         )
     
     if UserInput.name is not None:
-        UpdateRes.name=UserInput.name   
+        setattr(UpdateRes, "name", UserInput.name)
     if UserInput.location is not None:
-        UpdateRes.location=UserInput.location
+        setattr(UpdateRes, "location", UserInput.location)
     # if UserInput.rating is not None:
     #     UpdateRes.rating=UserInput.rating
 
@@ -234,15 +239,11 @@ def update_restaurant(restaurant_id: int,UserInput:restaurant_update,db:Session=
 @router.post("/{restaurant_id}/food-items", response_model=FoodItemResponse, status_code=status.HTTP_201_CREATED)
 def create_food_item(restaurant_id: int, food_item: FoodItemCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     # user = db.query(User).filter(User.email == current_user).first()
-    if not current_user:
-        raise HTTPException(status_code=404, detail="User not found")
-        
-
     restaurant = db.query(Restaurant).filter(Restaurant.id == restaurant_id).first()
-    if not restaurant:
+    if restaurant is None:
         raise HTTPException(status_code=404, detail="restaurant not found")
         
-    if restaurant.owner_id!=current_user.id:
+    if getattr(restaurant, "owner_id") != current_user.id:
         raise HTTPException(
             status_code=403, 
             detail="you are not authorized to add menu items to this restaurant."
@@ -260,7 +261,7 @@ def create_food_item(restaurant_id: int, food_item: FoodItemCreate, db: Session 
 def get_restaurant_menu(restaurant_id: int, db: Session = Depends(get_db)):
 
     restaurant=db.query(Restaurant).filter(Restaurant.id ==restaurant_id).first()
-    if not restaurant:
+    if restaurant is None:
         raise HTTPException(status_code=404, detail="Restaurant not found")
         
     menu_items=db.query(FoodItem).filter(FoodItem.restaurantID==restaurant_id).all()
@@ -270,7 +271,7 @@ def get_restaurant_menu(restaurant_id: int, db: Session = Depends(get_db)):
 async def add_review(restaurant_id: int, review_data: ReviewCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     #verify restaurant exists
     restaurant = db.query(Restaurant).filter(Restaurant.id == restaurant_id).first()
-    if not restaurant:
+    if restaurant is None:
         raise HTTPException(status_code=404, detail="Restaurant not found")
 
     #verified Purchase Check: Did they order from here?
@@ -301,7 +302,7 @@ async def add_review(restaurant_id: int, review_data: ReviewCreate, db: Session 
         Review.restaurant_id == restaurant_id
     ).scalar()
 
-    restaurant.rating = round(avg_rating or 0, 1)
+    setattr(restaurant, "rating", round(avg_rating or 0, 1))
 
     db.commit()
     db.refresh(restaurant)

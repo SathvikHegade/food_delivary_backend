@@ -11,6 +11,7 @@ from fastapi.security import OAuth2PasswordRequestForm
 from logger import logger
 from auth.rate_limiter import check_rate_limit, record_failed_attempt
 from services.email_service import send_security_alert
+from typing import cast
 
 router=APIRouter()
 hashing_pwd= CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -73,7 +74,7 @@ async def login(request:Request,user_credential:OAuth2PasswordRequestForm = Depe
         logger.warning(f"Failed login attempt for user: {user_credential.username}") #Add this
         blocked=await record_failed_attempt(request,Acc_checker.email)
         if blocked:
-            send_security_alert(Acc_checker.email)
+            send_security_alert(cast(str, Acc_checker.email))
 
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -89,5 +90,4 @@ async def login(request:Request,user_credential:OAuth2PasswordRequestForm = Depe
         "access_token": access_token, 
         "token_type": "bearer"
     }
-
 

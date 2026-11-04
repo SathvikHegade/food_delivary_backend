@@ -1,8 +1,11 @@
 import pickle
 import pandas as pd
+from pathlib import Path
 
-with open("content_recommender.pkl","rb") as file:
-    model_loader=pickle.load(file)
+MODEL_PATH = Path(__file__).parent / "content_recommender.pkl"
+
+with open(MODEL_PATH, "rb") as file:
+    model_loader = pickle.load(file)
 
 
 vectorizer = model_loader["vectorizer"]
@@ -13,11 +16,11 @@ food_data = model_loader["food_data"]
 
 # food_id = food_data.iloc[0]["id"]
 
-def recommend_food_by_id(food_id, top_n=5):
+def recommend_food_by_id(food_id, top_n=5)->list[dict]:
     matches = food_data[food_data["id"] == food_id]
 
     if matches.empty:
-        return f"Food with ID {food_id} not found."
+        return []
 
     food_index = matches.index[0]
 

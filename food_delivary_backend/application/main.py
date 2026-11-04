@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from routes import restaurant, users, cart, order
+from routes import restaurant, users, cart, order, recommendation
 from models.restaurant import Restaurant
 from database import engine,Base
 from models.food_items import FoodItem
@@ -30,5 +30,6 @@ app.include_router(restaurant.router, prefix="/restaurants", tags=["Restaurants"
 app.include_router(users.router, prefix="/auth", tags=["Authentication"])
 app.include_router(cart.router, prefix="/cart", tags=["Shopping Cart"])
 app.include_router(order.router,prefix="/order",tags=["Order_Items"])
+app.include_router(recommendation.router,prefix="/recommendations", tags=["Recommendations"])
 # app.include_router(restaurant.router)
 # app.include_router(users.router)
