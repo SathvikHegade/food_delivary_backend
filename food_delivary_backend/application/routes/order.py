@@ -9,10 +9,29 @@ from models.food_items import FoodItem
 from schemas.order import OrderResponse, OrderHistoryResponse
 from auth.oauth2 import get_current_user
 from models.restaurant import Restaurant
-from schemas.order import OrderStatusUpdate
+from schemas.order import OrderStatus,OrderStatusUpdate
 from logger import logger
 
 router = APIRouter()
+
+ALLOWED_TRANSITIONS={
+    OrderStatus.PLACED:{
+        OrderStatus.CONFIRMED,
+        OrderStatus.CANCELLED,
+    },
+    OrderStatus.CONFIRMED:{
+        OrderStatus.PREPARING,
+        OrderStatus.CANCELLED,
+    },
+    OrderStatus.PREPARING:{
+        OrderStatus.OUT_FOR_DELIVERY,
+    },
+    OrderStatus.OUT_FOR_DELIVERY:{
+        OrderStatus.DELIVERED,
+    },
+    OrderStatus.DELIVERED: set(),
+    OrderStatus.CANCELLED: set(),
+}
 
 @router.post("/", response_model=OrderResponse, status_code=status.HTTP_201_CREATED)
 def place_order(Idempotency_key:str=Header(...),db: Session = Depends(get_db), current_user_email: User = Depends(get_current_user)):
@@ -98,7 +117,12 @@ def get_single_order(order_id: int, db: Session =Depends(get_db), current_user_e
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found")
         
 
-    if order.user_id !=current_user_email.id:
+    is_order_owner = db.query(Order.id).filter(
+        Order.id == order_id,
+        Order.user_id == current_user_email.id,
+    ).first() is not None
+
+    if not is_order_owner:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to view this order")
 
     return order
@@ -135,13 +159,33 @@ def update_order_status(order_id:int,status_info:OrderStatusUpdate,db:Session=De
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Order has no items")
     
     food_item = db.query(FoodItem).filter(FoodItem.id == first_item.food_item_id).first()
-    staff = db.query(Restaurant).filter(Restaurant.id == food_item.restaurantID).first()
-    if staff.owner_id!=current_user_email.id:
+    if not food_item:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Order item food not found")
+
+    staff = db.query(Restaurant).filter(
+        Restaurant.id == food_item.restaurantID,
+        Restaurant.owner_id == current_user_email.id,
+    ).first()
+
+    if staff is None:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not authorized to update status this order"
         )
-    order.status = status_info.status.value
+
+    current_status=OrderStatus(order.status)
+    new_status=status_info.status
+
+    if new_status not in ALLOWED_TRANSITIONS[current_status]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"Invalid transition: "
+                f"{current_status.value} -> {new_status.value}"
+            )
+        )
+    
+    setattr(order, "status", new_status.value)#this is same as "order.status=new_status.value"
     db.commit()
     db.refresh(order)
     logger.info(f"Order {order_id} status updated to {order.status} by user {current_user_email.email}")
